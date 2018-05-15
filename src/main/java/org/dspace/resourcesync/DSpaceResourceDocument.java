@@ -5,10 +5,18 @@
  */
 package org.dspace.resourcesync;
 
+import java.sql.SQLException;
+import java.util.ArrayList;
+import java.util.HashMap;
+import java.util.List;
+import java.util.Map;
+
 import org.dspace.content.Bitstream;
 import org.dspace.content.Bundle;
 import org.dspace.content.Collection;
 import org.dspace.content.Item;
+import org.dspace.content.factory.ContentServiceFactory;
+import org.dspace.content.service.BitstreamService;
 import org.dspace.core.ConfigurationManager;
 import org.dspace.core.Context;
 import org.openarchives.resourcesync.ResourceSync;
@@ -16,19 +24,16 @@ import org.openarchives.resourcesync.ResourceSyncDocument;
 import org.openarchives.resourcesync.ResourceSyncLn;
 import org.openarchives.resourcesync.URL;
 
-import java.sql.SQLException;
-import java.util.ArrayList;
-import java.util.Arrays;
-import java.util.HashMap;
-import java.util.List;
-import java.util.Map;
-
 /**
  * @author Richard Jones
  *
  */
 public class DSpaceResourceDocument
 {
+	
+	private final transient BitstreamService bitstreamService = ContentServiceFactory.getInstance()
+			.getBitstreamService();
+	
     protected List<MetadataFormat> mdFormats = null;
     protected Context context;
     protected UrlManager um = new UrlManager();
@@ -54,8 +59,7 @@ public class DSpaceResourceDocument
         List<Bitstream> exposed = new ArrayList<Bitstream>();
 
         // get the collections that the item is part of
-        Collection[] collection = item.getCollections();
-        List<Collection> clist = Arrays.asList(collection);
+        List<Collection> clist = item.getCollections();
 
         // add all the relevant bitstreams
         boolean isOnlyMetadata = ConfigurationManager.getBooleanProperty("resourcesync", "resourcedump.onlymetadata");
@@ -83,13 +87,13 @@ public class DSpaceResourceDocument
         }
     }
 
-    protected URL addBitstream(Bitstream bitstream, Item item, List<Collection> collections, ResourceSyncDocument rl)
+    protected URL addBitstream(Bitstream bitstream, Item item, List<Collection> collections, ResourceSyncDocument rl) throws SQLException
     {
         URL bs = new URL();
 
         bs.setLoc(this.getBitstreamUrl(bitstream));
         bs.setLastModified(item.getLastModified()); // last modified date is not available on a bitstream, so we use the item one
-        bs.setType(bitstream.getFormat().getMIMEType());
+        bs.setType(bitstreamService.getFormat(context, bitstream).getMIMEType());
         bs.setLength(bitstream.getSize());
         bs.addHash(bitstream.getChecksumAlgorithm().toLowerCase(), bitstream.getChecksum());
 

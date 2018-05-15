@@ -5,24 +5,6 @@
  */
 package org.dspace.resourcesync;
 
-import org.apache.commons.cli.CommandLine;
-import org.apache.commons.cli.CommandLineParser;
-import org.apache.commons.cli.HelpFormatter;
-import org.apache.commons.cli.Options;
-import org.apache.commons.cli.PosixParser;
-import org.dspace.content.Collection;
-import org.dspace.content.Community;
-import org.dspace.content.DSpaceObject;
-import org.dspace.content.Site;
-import org.dspace.core.ConfigurationManager;
-import org.dspace.core.Constants;
-import org.dspace.core.Context;
-import org.dspace.handle.HandleManager;
-import org.openarchives.resourcesync.ResourceSync;
-import org.openarchives.resourcesync.ResourceSyncDescription;
-import org.openarchives.resourcesync.ResourceSyncDescriptionIndex;
-import org.apache.log4j.Logger;
-
 import java.io.File;
 import java.io.FileOutputStream;
 import java.io.IOException;
@@ -35,6 +17,27 @@ import java.util.Date;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+
+import org.apache.commons.cli.CommandLine;
+import org.apache.commons.cli.CommandLineParser;
+import org.apache.commons.cli.HelpFormatter;
+import org.apache.commons.cli.Options;
+import org.apache.commons.cli.PosixParser;
+import org.apache.log4j.Logger;
+import org.dspace.content.Collection;
+import org.dspace.content.Community;
+import org.dspace.content.DSpaceObject;
+import org.dspace.content.factory.ContentServiceFactory;
+import org.dspace.content.service.CollectionService;
+import org.dspace.content.service.CommunityService;
+import org.dspace.content.service.SiteService;
+import org.dspace.core.ConfigurationManager;
+import org.dspace.core.Constants;
+import org.dspace.core.Context;
+import org.dspace.handle.factory.HandleServiceFactory;
+import org.openarchives.resourcesync.ResourceSync;
+import org.openarchives.resourcesync.ResourceSyncDescription;
+import org.openarchives.resourcesync.ResourceSyncDescriptionIndex;
 /**
  * @author Richard Jones
  * @author Andrea Bollini (andrea.bollini at 4science.it)
@@ -43,6 +46,7 @@ import java.util.Map;
 public class ResourceSyncGenerator
 {
 	private static Logger log = Logger.getLogger(ResourceSyncGenerator.class);
+	
 	public static void main(String[] args)
 			throws Exception
 	{
@@ -56,21 +60,23 @@ public class ResourceSyncGenerator
 		Context context = new Context();
 		List<String> handles = buildHandleForResourceSync(context);
 
-		ResourceSyncGenerator rsg = new ResourceSyncGenerator(context, handles, null);
+		SiteService siteService = ContentServiceFactory.getInstance().getSiteService();
+		String siteHandle = siteService.findSite(context).getHandle();
+		ResourceSyncGenerator rsg = new ResourceSyncGenerator(context,siteHandle, handles, null);
 
 		try
 		{
 			if (cmd.hasOption("i"))
 			{
-				rsg.init();
+				rsg.init(context);
 			}
 			else if (cmd.hasOption("u"))
 			{
-				rsg.update();
+				rsg.update(context);
 			}
 			else if (cmd.hasOption("r"))
 			{
-				rsg.rebase();
+				rsg.rebase(context);
 			}
 			else
 			{
@@ -93,29 +99,35 @@ public class ResourceSyncGenerator
 	private String outdir;
 	private List<String> handles = null;
 	private Date fromChangeDump = null; 
-
+	private String siteHandle;
+	
 	public static List<String> buildHandleForResourceSync(Context context) throws SQLException {
+		SiteService siteService = ContentServiceFactory.getInstance().getSiteService();
+		CommunityService communityService = ContentServiceFactory.getInstance().getCommunityService();
+		CollectionService collectionService = ContentServiceFactory.getInstance().getCollectionService();
+		
 		String capabilityList = ConfigurationManager.getProperty("resourcesync", "capabilitylists");
-
+		String handleSite = siteService.findSite(context).getHandle();
+		
 		List<String> handles = new ArrayList<String>();
 		if(capabilityList.equals("top"))
 		{
-			Community[] communities = Community.findAllTop(context);
+			List<Community> communities = communityService.findAllTop(context);
 			for (Community c : communities)
 			{
 				handles.add(c.getHandle());
 			}
-			handles.add(Site.getSiteHandle());
+			handles.add(handleSite);
 		}
 		else if(capabilityList.equals("all"))
 		{
-			handles.add(Site.getSiteHandle());
-			Community[] communities = Community.findAll(context);
+			handles.add(handleSite);
+			List<Community> communities = communityService.findAll(context);
 			for (Community c : communities) 
 			{
 				handles.add(c.getHandle());
 			}
-			Collection[] collections = Collection.findAll(context);
+			List<Collection> collections = collectionService.findAll(context);
 			for (Collection c : collections) 
 			{
 				handles.add(c.getHandle());
@@ -123,7 +135,7 @@ public class ResourceSyncGenerator
 		}
 		else if(capabilityList.equals("site"))
 		{
-			handles.add(Site.getSiteHandle());
+			handles.add(handleSite);
 		}
 		else
 		{
@@ -131,7 +143,7 @@ public class ResourceSyncGenerator
 			String[] handle = capabilityList.split("\\s+");
 
 			for (String h : handle) {
-				DSpaceObject dso = HandleManager.resolveToObject(context, h);
+				DSpaceObject dso = HandleServiceFactory.getInstance().getHandleService().resolveToObject(context, h);
 				if (dso == null) 
 				{
 					log.error("The handle isn't valid "+handle);
@@ -152,14 +164,15 @@ public class ResourceSyncGenerator
 	
 	
 	
-	public ResourceSyncGenerator(Context context, List<String> handles, Date fromChangeDump)
+	public ResourceSyncGenerator(Context context, String siteHandle, List<String> handles, Date fromChangeDump)
 			throws IOException
 	{
+		this.siteHandle = siteHandle;
 		this.handles = handles;
 		this.ums = new HashMap<String, UrlManager>();
 		for (String h : handles) 
 		{
-			this.ums.put(h, new UrlManager(h));	
+			this.ums.put(h, new UrlManager(siteHandle, h));	
 		}
 		this.context = context;
 		this.resourceDump = ConfigurationManager.getBooleanProperty("resourcesync", "resourcedump.enable");
@@ -176,7 +189,7 @@ public class ResourceSyncGenerator
 	// methods to be used to interact with the generator
 	//////////////////////////////////////////////////////////////////////////////
 
-	public void init()
+	public void init(Context context)
 			throws IOException, SQLException, ParseException
 	{
 		this.changeDump = false;
@@ -207,9 +220,10 @@ public class ResourceSyncGenerator
 		}
 	}
 
-	public void update()
+	public void update(Context context)
 			throws IOException, SQLException, ParseException
 	{
+		
 		this.changeDump = true;
 
 		// check the directory is there
@@ -244,7 +258,7 @@ public class ResourceSyncGenerator
 		this.addChangeListToArchive(clFilenameList,handles);
 	}
 
-	public void rebase()
+	public void rebase(Context context)
 			throws IOException, SQLException, ParseException
 	{
 		this.changeDump = false;
@@ -382,7 +396,7 @@ public class ResourceSyncGenerator
 	}
 
 	private String getOutdir(String handle) {
-		if (handle != null && !Site.getSiteHandle().equals(handle)) {
+		if (handle != null && !(siteHandle.equals(handle))) {
 			return this.outdir + File.separator + handle.replaceAll("/", "-");
 		}
 		return this.outdir;
@@ -403,7 +417,7 @@ public class ResourceSyncGenerator
 		String filename = null;
 		Date from = new Date(0);
 		File dir;
-		if (handle != Site.getSiteHandle())
+		if (handle != siteHandle)
 		{
 			dir = new File(this.outdir+File.separator+handle.replace("/", "-"));
 		}
@@ -435,7 +449,7 @@ public class ResourceSyncGenerator
 		String filename = null;
 		Date from = new Date(0);
 		File dir;
-		if (handle != Site.getSiteHandle())
+		if (handle != siteHandle)
 		{
 			dir = new File(this.outdir+File.separator+handle.replace("/", "-"));
 		}
@@ -514,7 +528,7 @@ public class ResourceSyncGenerator
 		
 	}
 
-	private void generateResourceSyncDescription( String handle)
+	private void generateResourceSyncDescription(String handle)
 			throws IOException
 	{
 		FileOutputStream fos = this.getFileOutputStream(FileNames.resourceSyncDocument,handle);
@@ -568,7 +582,7 @@ public class ResourceSyncGenerator
 	{
 		String directoryName;
 		String path;
-		if (!handle.equals(Site.getSiteHandle()))
+		if (!handle.equals(siteHandle))
 		{
 			directoryName = handle.replace("/", "-");
 			path = ConfigurationManager.getProperty("resourcesync", "resourcesync.dir");
@@ -587,7 +601,7 @@ public class ResourceSyncGenerator
 	private void generateResourceDump(String handle)
 			throws IOException, SQLException
 	{
-		if (handle.equals(Site.getSiteHandle()))
+		if (handle.equals(siteHandle))
 		{
 			this.deleteFile(FileNames.resourceDump);
 			this.deleteFile(FileNames.resourceDumpZip);
@@ -643,8 +657,8 @@ public class ResourceSyncGenerator
 	{
 		
 		DSpaceChangeListArchive dcla = new DSpaceChangeListArchive(this.context);
-		dcla.setUm(ums.get(Site.getSiteHandle()));
-		FileOutputStream fos = this.getFileOutputStream(FileNames.changeListArchive,Site.getSiteHandle());
+		dcla.setUm(ums.get(siteHandle));
+		FileOutputStream fos = this.getFileOutputStream(FileNames.changeListArchive,siteHandle);
 		
 		for(String handle : handles)
 		{

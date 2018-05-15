@@ -5,18 +5,6 @@
  */
 package org.dspace.resourcesync;
 
-import org.dspace.content.Bitstream;
-import org.dspace.content.Collection;
-import org.dspace.content.DSpaceObject;
-import org.dspace.content.Item;
-import org.dspace.core.ConfigurationManager;
-import org.dspace.core.Context;
-import org.dspace.resourcesync.ResourceSyncAuditService.ChangeType;
-import org.openarchives.resourcesync.ChangeList;
-import org.openarchives.resourcesync.ResourceSync;
-import org.openarchives.resourcesync.ResourceSyncDocument;
-import org.openarchives.resourcesync.URL;
-
 import java.io.IOException;
 import java.io.OutputStream;
 import java.sql.SQLException;
@@ -25,6 +13,20 @@ import java.text.SimpleDateFormat;
 import java.util.ArrayList;
 import java.util.Date;
 import java.util.List;
+
+import org.dspace.content.Bitstream;
+import org.dspace.content.Collection;
+import org.dspace.content.DSpaceObject;
+import org.dspace.content.Item;
+import org.dspace.content.factory.ContentServiceFactory;
+import org.dspace.content.service.DSpaceObjectService;
+import org.dspace.core.ConfigurationManager;
+import org.dspace.core.Context;
+import org.dspace.resourcesync.ResourceSyncAuditService.ChangeType;
+import org.openarchives.resourcesync.ChangeList;
+import org.openarchives.resourcesync.ResourceSync;
+import org.openarchives.resourcesync.ResourceSyncDocument;
+import org.openarchives.resourcesync.URL;
 /**
  * @author Richard Jones
  * @author Andrea Bollini (andrea.bollini at 4science.it)
@@ -36,6 +38,7 @@ public class DSpaceChangeList extends DSpaceResourceDocument {
 	private Date from;
 	private Date to;
 	private SimpleDateFormat sdf = new SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss'Z'");
+	
 	public DSpaceChangeList(Context context, Date from, Date to, UrlManager um) {
 		super(context);
 		this.includeRestricted = ConfigurationManager.getBooleanProperty("resourcesync",
@@ -68,7 +71,8 @@ public class DSpaceChangeList extends DSpaceResourceDocument {
 		for (ResourceSyncEvent rse : rseList) {
 			if (!rse.getChangetype().toLowerCase().equals(ChangeType.REMOVE.type()))
 			{
-				DSpaceObject dso = DSpaceObject.find(context, rse.getResource_type(), rse.getResource_id());
+				DSpaceObjectService dsoService = ContentServiceFactory.getInstance().getDSpaceObjectService(rse.getResource_type());
+				DSpaceObject dso = dsoService.find(context, rse.getResource_id());
 				if (dso instanceof Item) {
 					Item i = (Item) dso;
 					cl.setChangeType(rse.getChangetype());
@@ -119,7 +123,7 @@ public class DSpaceChangeList extends DSpaceResourceDocument {
 		 	return bs;
 	    }
 	@Override
-	protected URL addBitstream(Bitstream bitstream, Item item, List<Collection> collections, ResourceSyncDocument rl) {
+	protected URL addBitstream(Bitstream bitstream, Item item, List<Collection> collections, ResourceSyncDocument rl) throws SQLException {
 		URL url = super.addBitstream(bitstream, item, collections, rl);
 		// we can't ever know if an item is created in DSpace, as no such metadata
 		// exists

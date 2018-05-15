@@ -12,6 +12,8 @@ import org.dspace.content.Bitstream;
 import org.dspace.content.Collection;
 import org.dspace.content.Item;
 import org.dspace.content.crosswalk.CrosswalkException;
+import org.dspace.content.factory.ContentServiceFactory;
+import org.dspace.content.service.BitstreamService;
 import org.dspace.core.Context;
 import org.openarchives.resourcesync.ResourceSyncDocument;
 import org.openarchives.resourcesync.URL;
@@ -36,6 +38,10 @@ import java.util.zip.ZipOutputStream;
  */
 public class DSpaceChangeDumpZip  extends DSpaceResourceList
 {
+	
+	private final transient BitstreamService bitstreamService = ContentServiceFactory.getInstance()
+			.getBitstreamService();
+	
 	private String dumpPathFile;
 	private ZipOutputStream zos;
 	private ZipOutputStream zosOnTheFly;
@@ -125,7 +131,7 @@ public class DSpaceChangeDumpZip  extends DSpaceResourceList
     }
 
     @Override
-    protected URL addBitstream(Bitstream bitstream, Item item, List<Collection> collections, ResourceSyncDocument rl)
+    protected URL addBitstream(Bitstream bitstream, Item item, List<Collection> collections, ResourceSyncDocument rl) throws SQLException
     {
         URL url = super.addBitstream(bitstream, item, collections, rl);
         String dumppath = this.getPath(item, bitstream, null, false);
@@ -135,7 +141,7 @@ public class DSpaceChangeDumpZip  extends DSpaceResourceList
         try
         {
             String entryName = this.getPath(item, bitstream, null, true);
-            InputStream is = bitstream.retrieve();
+            InputStream is = bitstreamService.retrieve(context, bitstream);
             this.copyToZip(entryName, is);
         }
         catch (IOException e)
@@ -194,7 +200,7 @@ public class DSpaceChangeDumpZip  extends DSpaceResourceList
             getZos().putNextEntry(e);
 
             // get the dissemination crosswalk for this prefix and get the element for the object
-            MetadataDisseminator.disseminate(item, format.getPrefix(), getZos());
+            MetadataDisseminator.disseminate(context, item, format.getPrefix(), getZos());
 
             getZos().closeEntry();
         }

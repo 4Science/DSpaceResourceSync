@@ -5,16 +5,6 @@
  */
 package org.dspace.resourcesync;
 
-import org.apache.log4j.Logger;
-import org.dspace.authorize.AuthorizeException;
-import org.dspace.content.Bitstream;
-import org.dspace.content.Collection;
-import org.dspace.content.Item;
-import org.dspace.content.crosswalk.CrosswalkException;
-import org.dspace.core.Context;
-import org.openarchives.resourcesync.ResourceSyncDocument;
-import org.openarchives.resourcesync.URL;
-
 import java.io.ByteArrayInputStream;
 import java.io.ByteArrayOutputStream;
 import java.io.File;
@@ -28,12 +18,28 @@ import java.sql.SQLException;
 import java.util.List;
 import java.util.zip.ZipEntry;
 import java.util.zip.ZipOutputStream;
+
+import org.apache.log4j.Logger;
+import org.dspace.authorize.AuthorizeException;
+import org.dspace.content.Bitstream;
+import org.dspace.content.Collection;
+import org.dspace.content.Item;
+import org.dspace.content.crosswalk.CrosswalkException;
+import org.dspace.content.factory.ContentServiceFactory;
+import org.dspace.content.service.BitstreamService;
+import org.dspace.core.Context;
+import org.openarchives.resourcesync.ResourceSyncDocument;
+import org.openarchives.resourcesync.URL;
 /**
  * @author Richard Jones
  * @author Andrea Bollini (andrea.bollini at 4science.it)
  * @author Andrea Petrucci (andrea.petrucci at 4science.it)
  */
 public class DSpaceResourceDumpZip extends DSpaceResourceList {
+	
+	private final transient BitstreamService bitstreamService = ContentServiceFactory.getInstance()
+			.getBitstreamService();
+	
 	private String dumpDir;
 	private ZipOutputStream zos;
 	private ZipOutputStream zosOnTheFly;
@@ -115,7 +121,7 @@ public class DSpaceResourceDumpZip extends DSpaceResourceList {
 	}
 
 	@Override
-	protected URL addBitstream(Bitstream bitstream, Item item, List<Collection> collections, ResourceSyncDocument rl) {
+	protected URL addBitstream(Bitstream bitstream, Item item, List<Collection> collections, ResourceSyncDocument rl) throws SQLException {
 		URL url = super.addBitstream(bitstream, item, collections, rl);
 		String dumppath = this.getPath(item, bitstream, null, false);
 		url.setPath(dumppath);
@@ -123,7 +129,7 @@ public class DSpaceResourceDumpZip extends DSpaceResourceList {
 		// now actually get the bitstream and stick it in the directory
 		try {
 			String entryName = this.getPath(item, bitstream, null, true);
-			InputStream is = bitstream.retrieve();
+			InputStream is = bitstreamService.retrieve(context, bitstream);
 			this.copyToZip(entryName, is);
 		} catch (IOException e) {
 			log.error(e.getMessage(),e);				
@@ -167,7 +173,7 @@ public class DSpaceResourceDumpZip extends DSpaceResourceList {
 
 			// get the dissemination crosswalk for this prefix and get the element for the
 			// object
-			MetadataDisseminator.disseminate(item, format.getPrefix(), getZos());
+			MetadataDisseminator.disseminate(context, item, format.getPrefix(), getZos());
 
 			getZos().closeEntry();
 		} catch (IOException e) {

@@ -13,6 +13,7 @@ import java.util.ArrayList;
 import java.util.Date;
 import java.util.Iterator;
 import java.util.List;
+import java.util.UUID;
 
 import org.apache.log4j.LogManager;
 import org.apache.log4j.Logger;
@@ -90,7 +91,7 @@ public class ResourceSyncAuditService {
 		return solr;
 	}
 
-	public void addEvent(int resourceID, int resourcetype, ChangeType eventtype, Date date, List<String> scopes,String handle,String[] identifiers) {
+	public void addEvent(UUID resourceID, int resourcetype, ChangeType eventtype, Date date, List<String> scopes,String handle,List<String> identifiers) {
 		SolrInputDocument solrInDoc = new SolrInputDocument();
 		solrInDoc.addField(RESOURCE_ID_FIELD, resourceID);
 		solrInDoc.addField(RESOURCE_TYPE_FIELD, resourcetype);
@@ -126,7 +127,7 @@ public class ResourceSyncAuditService {
 		while (iterator.hasNext()) {
 			ResourceSyncEvent rse = new ResourceSyncEvent();
 			SolrDocument sd = iterator.next();
-			rse.setResource_id((int) sd.getFieldValue(RESOURCE_ID_FIELD));
+			rse.setResource_id((UUID) sd.getFieldValue(RESOURCE_ID_FIELD));
 			rse.setResource_type((int) sd.getFieldValue(RESOURCE_TYPE_FIELD));
 			rse.setChangetype((String) sd.getFieldValue(CHANGETYPE_FIELD));
 			rse.setDatetime((Date) sd.getFieldValue(DATETIME_FIELD));

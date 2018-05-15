@@ -7,12 +7,13 @@ package org.dspace.resourcesync;
 
 import java.util.Date;
 import java.util.List;
+import java.util.UUID;
 /**
  * @author Andrea Bollini (andrea.bollini at 4science.it)
  * @author Andrea Petrucci (andrea.petrucci at 4science.it)
  */
 public class ResourceSyncEvent {
-	private int resource_id;
+	private UUID resource_id;
 	private int resource_type;
 	private String changetype;
 	private Date datetime;
@@ -31,10 +32,10 @@ public class ResourceSyncEvent {
 	public void setHandle(String handle) {
 		this.handle = handle;
 	}
-	public int getResource_id() {
+	public UUID getResource_id() {
 		return resource_id;
 	}
-	public void setResource_id(int resource_id) {
+	public void setResource_id(UUID resource_id) {
 		this.resource_id = resource_id;
 	}
 	public int getResource_type() {

@@ -5,21 +5,6 @@
  */
 package org.dspace.resourcesync;
 
-import org.apache.commons.lang3.StringUtils;
-import org.apache.log4j.Logger;
-import org.dspace.authorize.AuthorizeException;
-import org.dspace.content.DSpaceObject;
-import org.dspace.content.Item;
-import org.dspace.content.crosswalk.CrosswalkException;
-import org.dspace.core.ConfigurationManager;
-import org.dspace.core.Constants;
-import org.dspace.core.Context;
-import org.dspace.handle.HandleManager;
-import javax.servlet.ServletException;
-import javax.servlet.http.HttpServlet;
-import javax.servlet.http.HttpServletRequest;
-import javax.servlet.http.HttpServletResponse;
-
 import java.io.File;
 import java.io.FileInputStream;
 import java.io.IOException;
@@ -31,6 +16,24 @@ import java.util.Date;
 import java.util.List;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
+
+import javax.servlet.ServletException;
+import javax.servlet.http.HttpServlet;
+import javax.servlet.http.HttpServletRequest;
+import javax.servlet.http.HttpServletResponse;
+
+import org.apache.commons.lang3.StringUtils;
+import org.apache.log4j.Logger;
+import org.dspace.authorize.AuthorizeException;
+import org.dspace.content.DSpaceObject;
+import org.dspace.content.Item;
+import org.dspace.content.crosswalk.CrosswalkException;
+import org.dspace.content.factory.ContentServiceFactory;
+import org.dspace.content.service.SiteService;
+import org.dspace.core.ConfigurationManager;
+import org.dspace.core.Constants;
+import org.dspace.core.Context;
+import org.dspace.handle.factory.HandleServiceFactory;
 /**
  * @author Richard Jones
  * @author Andrea Bollini (andrea.bollini at 4science.it)
@@ -126,7 +129,10 @@ public class ResourceSyncServlet extends HttpServlet
 	        		}
 	        		Date from = ResourceSyncGenerator.sdfChangeList.parse(date);
 	        		List <ResourceSyncEvent> rseList = new ArrayList<ResourceSyncEvent>();
-	        		ResourceSyncGenerator rsg = new ResourceSyncGenerator(context, handles, from);
+	        		SiteService siteService = ContentServiceFactory.getInstance().getSiteService();
+	        		String siteHandle = siteService.findSite(context).getHandle();
+	        		ResourceSyncGenerator rsg = new ResourceSyncGenerator(context, siteHandle, handles, from);
+
 	        		rseList = rsg.getChange(handle);
 	        		rsg.generateChangeDump(handle, rseList, servletOutputStream);
         		}
@@ -176,7 +182,7 @@ public class ResourceSyncServlet extends HttpServlet
             context = new Context();
 
             // get the DSpace object that we want to expose
-            DSpaceObject dso = HandleManager.resolveToObject(context, handle);
+            DSpaceObject dso = HandleServiceFactory.getInstance().getHandleService().resolveToObject(context, handle);
             if (dso == null)
             {
                 // no such object, send 404
@@ -198,7 +204,7 @@ public class ResourceSyncServlet extends HttpServlet
 
             // serialise to the wire
             OutputStream os = resp.getOutputStream();
-            MetadataDisseminator.disseminate((Item) dso, formatPrefix, os);
+            MetadataDisseminator.disseminate(context, (Item) dso, formatPrefix, os);
         }
         catch(SQLException e)
         {

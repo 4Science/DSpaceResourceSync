@@ -9,6 +9,7 @@ import java.sql.SQLException;
 import java.util.ArrayList;
 import java.util.Date;
 import java.util.List;
+import java.util.UUID;
 
 import org.apache.log4j.Logger;
 import org.dspace.content.Bitstream;
@@ -18,6 +19,8 @@ import org.dspace.content.Community;
 import org.dspace.content.DSpaceObject;
 import org.dspace.content.Item;
 import org.dspace.content.Site;
+import org.dspace.content.factory.ContentServiceFactory;
+import org.dspace.content.service.SiteService;
 import org.dspace.core.Constants;
 import org.dspace.core.Context;
 import org.dspace.event.Consumer;
@@ -39,7 +42,7 @@ public class ResourceSyncConsumer implements Consumer {
 	private static Logger log = Logger.getLogger(ResourceSyncConsumer.class);
 
 	private ResourceSyncAuditService resourceSyncAuditService;
-
+	private final transient SiteService siteService = ContentServiceFactory.getInstance().getSiteService();
 
 	public void initialize() throws Exception {
 		resourceSyncAuditService = new DSpace().getServiceManager()
@@ -78,7 +81,7 @@ public class ResourceSyncConsumer implements Consumer {
 			break;
 
 		case Constants.BITSTREAM:
-			consumeBistreamEvent(event);
+			consumeBistreamEvent(ctx, event);
 			break;
 
 		case Constants.COLLECTION:
@@ -104,14 +107,14 @@ public class ResourceSyncConsumer implements Consumer {
 
 	private void consumeCollectionEvent(Collection collection, Event event) {
 		int et = event.getEventType();
-		int itemID = event.getObjectID();
+		UUID itemID = event.getObjectID();
 
 		if (et != Event.ADD && et != Event.REMOVE) {
 			return;
 		}
 
 		List<String> scopes = new ArrayList<String>();
-		Community[] community = null;
+		List<Community> community = null;
 		switch (et) {
 		case Event.ADD:
 			try {
@@ -140,21 +143,21 @@ public class ResourceSyncConsumer implements Consumer {
 		}
 	}
 
-	private void consumeBistreamEvent(Event event) {
+	private void consumeBistreamEvent(Context context, Event event) throws SQLException {
 		int et = event.getEventType();
-		int bitstreamID = event.getSubjectID();
+		UUID bitstreamID = event.getSubjectID();
 
 		if (et != Event.DELETE) {
 			return;
 		}
 		List<String> scopes = new ArrayList<String>();
-		scopes.add(Site.getSiteHandle());
+		scopes.add(siteService.findSite(context).getHandle());
 		addRemoveEvent(Constants.BITSTREAM, bitstreamID, scopes,event.getDetail(),event.getIdentifiers());
 	}
 
 	private void consumeItemEvent(Context context, Item item, Event event) throws SQLException {
 		int et = event.getEventType();
-		int itemID = event.getSubjectID();
+		UUID itemID = event.getSubjectID();
 		Bundle bnd = (Bundle) event.getObject(context);
 
 		if (et != Event.ADD && et != Event.REMOVE && et != Event.INSTALL && et != Event.MODIFY_METADATA
@@ -165,29 +168,29 @@ public class ResourceSyncConsumer implements Consumer {
 		List<String> scopes = new ArrayList<String>();
 		switch (et) {
 		case Event.INSTALL:
-			scopes.add(Site.getSiteHandle());
+			scopes.add(siteService.findSite(context).getHandle());
 			addCreateEvent(Constants.ITEM, itemID, scopes,event.getDetail(),event.getIdentifiers());
 			break;
 		case Event.MODIFY_METADATA:
-			addUpdateEvent(Constants.ITEM, itemID, getScopes(item),event.getDetail(),event.getIdentifiers());
+			addUpdateEvent(Constants.ITEM, itemID, getScopes(context, item),event.getDetail(),event.getIdentifiers());
 			break;
 		case Event.ADD:
 
 			if (isResourceSyncRelevant(bnd)) {
 				for (Bitstream b : bnd.getBitstreams()) {
-					addCreateEvent(Constants.BITSTREAM, b.getID(), getScopes(item),event.getDetail(),event.getIdentifiers());
+					addCreateEvent(Constants.BITSTREAM, b.getID(), getScopes(context, item),event.getDetail(),event.getIdentifiers());
 				}
 			}
 			break;
 		case Event.REMOVE:
 			if (isResourceSyncRelevant(bnd)) {
 				for (Bitstream b : bnd.getBitstreams()) {
-					addRemoveEvent(Constants.BITSTREAM, b.getID(), getScopes(item),event.getDetail(),event.getIdentifiers());
+					addRemoveEvent(Constants.BITSTREAM, b.getID(), getScopes(context, item),event.getDetail(),event.getIdentifiers());
 				}
 			}
 			break;
 		case Event.DELETE:
-			scopes.add(Site.getSiteHandle());
+			scopes.add(siteService.findSite(context).getHandle());
 			addRemoveEvent(Constants.ITEM, itemID, scopes,event.getDetail(),event.getIdentifiers());
 			break;
 		}
@@ -216,46 +219,48 @@ public class ResourceSyncConsumer implements Consumer {
 			return;
 		}
 
-		Item item = (Item) bundle.getParentObject();
+		List<Item> items = bundle.getItems();
 
-		int bitID = event.getObjectID();
-		List<String> scopes = getScopes(item);
-		switch (et) {
-		case Event.ADD:
-			addCreateEvent(Constants.BITSTREAM, bitID, scopes,event.getDetail(),event.getIdentifiers());
-			break;
-		case Event.REMOVE:
-			addRemoveEvent(Constants.BITSTREAM, bitID, scopes,event.getDetail(),event.getIdentifiers());
-			break;
+		for(Item item : items) {
+			UUID bitID = event.getObjectID();
+			List<String> scopes = getScopes(context, item);
+			switch (et) {
+			case Event.ADD:
+				addCreateEvent(Constants.BITSTREAM, bitID, scopes,event.getDetail(),event.getIdentifiers());
+				break;
+			case Event.REMOVE:
+				addRemoveEvent(Constants.BITSTREAM, bitID, scopes,event.getDetail(),event.getIdentifiers());
+				break;
+			}
 		}
 	}
 
-	private void addCreateEvent(int resourcetype, int resourceID, List<String> scopes,String handle, String[] identifiers) {
+	private void addCreateEvent(int resourcetype, UUID resourceID, List<String> scopes,String handle, List<String> identifiers) {
 		addEvent(resourcetype, resourceID, ChangeType.CREATE, scopes,handle,identifiers);
 	}
 
-	private void addUpdateEvent(int resourcetype, int resourceID, List<String> scopes,String handle, String[] identifiers) {
+	private void addUpdateEvent(int resourcetype, UUID resourceID, List<String> scopes,String handle, List<String> identifiers) {
 		addEvent(resourcetype, resourceID, ChangeType.UPDATE, scopes,handle,identifiers);
 
 	}
 
-	private void addRemoveEvent(int resourcetype, int resourceID, List<String> scopes,String handle, String[] identifiers) {
+	private void addRemoveEvent(int resourcetype, UUID resourceID, List<String> scopes,String handle, List<String> identifiers) {
 		addEvent(resourcetype, resourceID, ChangeType.REMOVE, scopes,handle,identifiers);
 	}
 
-	private void addEvent(int resourcetype, int resourceID, ChangeType eventtype, List<String> scopes,String handle, String[] identifiers) {
+	private void addEvent(int resourcetype, UUID resourceID, ChangeType eventtype, List<String> scopes,String handle, List<String> identifiers) {
 		resourceSyncAuditService.addEvent(resourceID, resourcetype, eventtype, new Date(), scopes,handle,identifiers);
 	}
 
-	private List<String> getScopes(Item item) throws SQLException {
+	private List<String> getScopes(Context context, Item item) throws SQLException {
 		List<String> scopes = new ArrayList<String>();
 		for (Collection c : item.getCollections()) {
+			for (Community cc : c.getCommunities()) {
+				scopes.add(cc.getHandle());
+			}
 			scopes.add(c.getHandle());
 		}
-		for (Community c : item.getCommunities()) {
-			scopes.add(c.getHandle());
-		}
-		scopes.add(Site.getSiteHandle());
+		scopes.add(siteService.findSite(context).getHandle());
 		return scopes;
 	}
 

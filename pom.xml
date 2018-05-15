@@ -10,7 +10,7 @@
 	<packaging>war</packaging>
 
 	<properties>
-		<dspace.version>5.9-SNAPSHOT</dspace.version>
+		<dspace.version>6.3-SNAPSHOT</dspace.version>
 		<root.basedir>${basedir}</root.basedir>
 	</properties>
 
@@ -138,7 +138,7 @@
 			<version>${dspace.version}</version>
 		</dependency>
 		<dependency>
-			<groupId>org.openarchives</groupId>
+			<groupId>org.dspace</groupId>
 			<artifactId>resourcesync</artifactId>
 			<version>1.1-SNAPSHOT</version>
 		</dependency>

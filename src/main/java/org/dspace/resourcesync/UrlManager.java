@@ -19,14 +19,14 @@ public class UrlManager
     public UrlManager() {
     	
     }
-    public UrlManager(String handle)
+    public UrlManager(String siteHandle, String handle)
     {
         this.base = ConfigurationManager.getProperty("resourcesync", "base-url");
         if (!this.base.endsWith("/"))
         {
             this.base += "/";
         }
-        if (handle != null && !handle.equals(Site.getSiteHandle()))
+        if (handle != null && !handle.equals(siteHandle))
         {
             String dir = handle.replace("/", "-");
         	this.base += dir + "/";

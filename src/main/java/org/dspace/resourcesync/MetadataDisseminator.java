@@ -5,19 +5,20 @@
  */
 package org.dspace.resourcesync;
 
+import java.io.IOException;
+import java.io.OutputStream;
+import java.sql.SQLException;
+
 import org.dspace.authorize.AuthorizeException;
 import org.dspace.content.Item;
 import org.dspace.content.crosswalk.CrosswalkException;
 import org.dspace.content.crosswalk.DisseminationCrosswalk;
-import org.dspace.core.PluginManager;
+import org.dspace.core.Context;
+import org.dspace.core.factory.CoreServiceFactory;
 import org.jdom.Document;
 import org.jdom.Element;
 import org.jdom.output.Format;
 import org.jdom.output.XMLOutputter;
-
-import java.io.IOException;
-import java.io.OutputStream;
-import java.sql.SQLException;
 
 /**
  * @author Richard Jones
@@ -25,11 +26,11 @@ import java.sql.SQLException;
  */
 public class MetadataDisseminator
 {
-    public static void disseminate(Item item, String formatPrefix, OutputStream os)
+    public static void disseminate(Context context, Item item, String formatPrefix, OutputStream os)
             throws IOException, CrosswalkException, AuthorizeException, SQLException
     {
-        DisseminationCrosswalk dc = (DisseminationCrosswalk) PluginManager.getNamedPlugin(DisseminationCrosswalk.class, formatPrefix);
-        Element element = dc.disseminateElement(item);
+        DisseminationCrosswalk dc = (DisseminationCrosswalk) CoreServiceFactory.getInstance().getPluginService().getNamedPlugin(DisseminationCrosswalk.class, formatPrefix);
+        Element element = dc.disseminateElement(context, item);
 
         // serialise the element out to the zip output stream
         element.detach();
